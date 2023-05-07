@@ -156,7 +156,7 @@ def read_file(file: File):
 
     return text_by_page_split
 
-def create_embeddings_table(embeddings_model: str, entity: int, file: File, database: db) -> pd.DataFrame:
+def create_embeddings_table(embeddings_model: str, entity: str, file: File, database: db) -> pd.DataFrame:
     """Create embeddings for each text segment and return as a DataFrame
         The embeddings model returns a data object of this format
         {
