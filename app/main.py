@@ -37,12 +37,58 @@ from scipy import spatial  # for calculating vector similarities for search
 from dotenv import load_dotenv  # for making environment variable OPENAI_API_KEY accessible
 from PyPDF2 import PdfReader    # for loading PDf file data
 import numpy as np   # for splitting page text into equal size sub-strings
-import re
+from dataclasses import dataclass
+import psycopg2 as pg
+from os import getenv
+
 load_dotenv()
 
 # models
 EMBEDDING_MODEL = "text-embedding-ada-002"
 GPT_MODEL = "gpt-3.5-turbo"
+openai.api_key = getenv('OPENAI_API_KEY')
+
+@dataclass
+class File:
+    file_data: str|bytes
+    entity: str
+    category: str
+
+class db:
+    conn = pg.connect(getenv('DATABASE_URL'))
+
+    def get_embeddings(self) -> pd.DataFrame:
+        sql = "SELECT text, embedding FROM embeddings;"
+        with self.conn:
+            with self.conn.cursor() as curr:
+                curr.execute(sql) 
+                result = pd.DataFrame(curr.fetchall())
+                result.columns = ['text', 'embedding']
+                result['embedding'] = result['embedding'].apply(ast.literal_eval)
+                return result
+
+    def post_embeddings(self, values: list[tuple|dict]) -> bool:
+        success = False
+        if isinstance(values[0], dict):
+            sql = "INSERT INTO embeddings (text, embedding) VALUES (%(text)s, %(embedding)s)"
+        elif isinstance(values[0], tuple):
+            sql = "INSERT INTO embeddings (text, embedding) VALUES (%s, %s);"
+
+        with self.conn:
+            with self.conn.cursor() as curr:
+                if len(values) == 1:
+                    insert = curr.execute
+                elif len(values) > 1:
+                    insert = curr.executemany
+                else:
+                    success = False
+                insert(sql,values)
+                success = True
+        return success 
+    
+    
+    def close(self):
+        self.conn.close()
 
 def convert_to_tokens(text: str|list[str], model: str) -> list:
     encoding = tiktoken.encoding_for_model(model_name=model)
@@ -51,19 +97,22 @@ def convert_to_tokens(text: str|list[str], model: str) -> list:
     elif isinstance(text, list):
         return encoding.encode_batch(text=text)
 
-def read_file(file):
+def read_file(file: File):
     """
     Reads in an entire file and splits the text into 3 equal sections per page 
     Returns: a list of text sections
     """
-    reader = PdfReader(file)
+    reader = PdfReader(file.file_data)
     text_by_page = [page.extract_text() for page in reader.pages]
     text_by_page_split = []
-
+    prefix = np.array([file.entity, file.category])
     for page in text_by_page:
         # make sure special unicode characters are removed
         page = np.array(page.encode('ascii','ignore').decode().split()) 
-        split_string = [" ".join(section) for section in np.array_split(page,3)]
+        split_string = [
+            " ".join(np.concatenate((prefix,section)))
+             for section in np.array_split(page,3)
+        ]
         text_by_page_split.extend(list(split_string))
 
     return text_by_page_split
@@ -101,6 +150,11 @@ def create_embeddings(text: list, embeddings_model: str) -> pd.DataFrame:
         embeddings.extend(batch_embeddings)
     return pd.DataFrame({'text': text, 'embedding': embeddings})
 
-def save_results(df: pd.DataFrame):
-    save_path = './file_embeddings.csv'
-    df.to_csv(save_path, index=False)
+def save_results(df: pd.DataFrame, database: db):
+    # convert embeddings to strings so they aren't converted to python sets
+    df["embedding"] = df["embedding"].apply(str)
+    records: list[dict] = df.to_dict(orient="records") 
+    success = database.post_embeddings(records)
+    assert success, "Embeddings unable to be saved"
+    database.close()
+    return
