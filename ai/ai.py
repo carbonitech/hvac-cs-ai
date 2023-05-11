@@ -1,11 +1,9 @@
 """Interface for the AI"""
 
 import openai
-from os import getenv
-from dotenv import load_dotenv
-from app.file_handler import File
 import pandas as pd
 from db.db import db
+from app.file_handler import File
 
 class AI:
 
