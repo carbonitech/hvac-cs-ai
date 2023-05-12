@@ -32,20 +32,13 @@ import pandas as pd  # for storing text and embeddings data
 import tiktoken  # for counting tokens
 from scipy import spatial  # for calculating vector similarities for search
 
-# imports - other
-from dotenv import load_dotenv  # for making environment variable OPENAI_API_KEY accessible
-from os import getenv
-
 # project module imports
 from db.db import db
 from ai.ai import AI
 from app.file_handler import File
 
-load_dotenv()
-
 EMBEDDING_MODEL = "text-embedding-ada-002"
 GPT_MODEL = "gpt-3.5-turbo"
-openai.api_key = getenv('OPENAI_API_KEY')
 
 def convert_to_tokens(text: str|list[str], model: str) -> list:
     encoding = tiktoken.encoding_for_model(model_name=model)

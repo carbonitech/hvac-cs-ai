@@ -1,5 +1,5 @@
 """Interface for the AI"""
-
+from dotenv import load_dotenv; load_dotenv()        # expose the OPEN_API_KEY before the openai module attempts to pull it in __init__
 import openai
 import pandas as pd
 from db.db import db
