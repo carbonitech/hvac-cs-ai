@@ -37,10 +37,30 @@ class TestAI(AI):
 
 def test_generate_embeddings_table():
     database = db(connection=getenv('DATABASE_URL'))
-    ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
     entity = 'ADP'
     category = 'Warranty'
     file = File(entity=entity, category=category, file_path=file_path)
+    ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
+    # check that the data has been chunked in processing
     assert len(embeddings_table) == file.num_pages*3
+    # check that there are no NaN values
+    assert not embeddings_table.isnull().values.any()
+
+def test__register_file_with_the_database():
+    database = db(connection=getenv('DATABASE_URL'))
+    file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
+    entity = 'ADP'
+    category = 'Warranty'
+    file = File(entity=entity, category=category, file_path=file_path)
+    ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
+    file_id = ai._register_file_with_the_database(file=file)
+    # check that an id has been returned
+    assert file_id
+    assert isinstance(file_id, int)
+    # check that this file id has been recorded under the expected file name 
+    with database as session:
+        file_record = session.get_file(file_id=file_id)
+    assert file_id == file_record['id']
+    assert file.file_name() == file_record['name'] 
