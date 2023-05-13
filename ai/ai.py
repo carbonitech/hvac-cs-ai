@@ -13,6 +13,7 @@ class AI:
         self.db = database
 
     def _create_embedding(self, text):
+        """encapsulate the embeddings creation call -- enables mocking for tests"""
         return openai.Embedding.create(
             model=self.embedding_model_name,
             input=text
@@ -48,11 +49,11 @@ class AI:
         return file_id
 
     
-    def save_embeddings(self, df: pd.DataFrame):
+    def save_embeddings(self, df: pd.DataFrame) -> bool:
         # convert embeddings to strings so they aren't converted to python sets by Postgres
+        # NOTE this change affects changes the state of the df inputted
         df["embedding"] = df["embedding"].apply(str)
         records: list[dict] = df.to_dict(orient="records") 
         with self.db as session:
             success = session.post_embeddings(records)
-        assert success, "Embeddings unable to be saved"
-        return
+        return success
