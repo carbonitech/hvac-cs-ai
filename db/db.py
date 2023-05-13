@@ -19,11 +19,15 @@ class db:
         self.close()
         return True
 
-    def get_embeddings(self) -> pd.DataFrame:
+    def get_embeddings(self, file_id: int = None) -> pd.DataFrame:
         sql = "SELECT text, embedding FROM embeddings;"
         with self.conn:
             with self.conn.cursor() as curr:
-                curr.execute(sql) 
+                if file_id:
+                    sql = sql.replace(';', ' WHERE file_id = %s;')
+                    curr.execute(sql, (file_id,)) 
+                else:
+                    curr.execute(sql) 
                 result = pd.DataFrame(curr.fetchall())
                 result.columns = ['text', 'embedding']
                 result['embedding'] = result['embedding'].apply(ast.literal_eval)
@@ -34,8 +38,9 @@ class db:
         if isinstance(values[0], dict):
             sql = "INSERT INTO embeddings (text, embedding, file_id, category) VALUES (%(text)s, %(embedding)s,%(file_id)s, %(category)s)"
         elif isinstance(values[0], tuple):
-            sql = "INSERT INTO embeddings (text, embedding, file_id, category) VALUES (%s, %s, %s, %s);"
-
+            sql = "INSERT INTO embeddings (text, embedding, file_id, category) VALUES (%s, %s, %s, %s)"
+        # avoid breaking when duplicated text gets kicked back due to the uniqueness constraint in the database
+        sql += " ON CONFLICT DO NOTHING;"
         with self.conn:
             with self.conn.cursor() as curr:
                 if len(values) == 1:
@@ -78,12 +83,33 @@ class db:
                 return curr.fetchone()[0]
     
     def get_file(self, file_id: int) -> dict:
+        """Getting only file metadata, not the embeddings"""
         with self.conn:
             with self.conn.cursor() as curr:
                 sql = "SELECT id, name, entity_id FROM files WHERE id = %s;"
                 curr.execute(sql,(file_id,))
                 record_id, file_name, entity_id = curr.fetchone()
         return {"id": record_id, "name": file_name, "entity_id": entity_id}
+
+    def del_file(self, file_id: int):
+        with self.conn:
+            with self.conn.cursor() as curr:
+                sql_del_embeddings = "DELETE FROM embeddings WHERE file_id = %s;"
+                sql_del_file = "DELETE FROM files WHERE id = %s;"
+                curr.execute(sql_del_embeddings, (file_id,))
+                curr.execute(sql_del_file, (file_id,))
+
+    def del_entity(self, entity_id: int):
+        with self.conn:
+            with self.conn.cursor() as curr:
+                sub_query = "SELECT files.id FROM files JOIN entities ON entities.id = files.entity_id WHERE entities.id = %s"
+                sql = f'DELETE FROM embeddings WHERE file_id IN ({sub_query});'
+                curr.execute(sql, (entity_id,))
+                sql_del_files = f"DELETE FROM files WHERE id IN ({sub_query})"
+                curr.execute(sql_del_files, (entity_id,))
+                sql_del_entity = "DELETE FROM entities WHERE id = %s;"
+                curr.execute(sql_del_entity, (entity_id,))
+
 
     def close(self):
         self.conn.close()
