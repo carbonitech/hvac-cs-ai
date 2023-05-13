@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 import numpy as np
 
 @dataclass
