@@ -2,13 +2,15 @@
 
 import ast
 import psycopg2 as pg
-from os import getenv
 import pandas as pd
 
 class db:
 
+    def __init__(self, connection: str):
+        self.connection = connection
+
     def __enter__(self):
-        self.conn = pg.connect(getenv('DATABASE_URL'))
+        self.conn = pg.connect(self.connection)
         return self
     
     def __exit__(self, e_type, e_val, e_tb):
