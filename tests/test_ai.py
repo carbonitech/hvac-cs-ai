@@ -48,6 +48,7 @@ def test_generate_embeddings_table():
     # check that there are no NaN values
     assert not embeddings_table.isnull().values.any()
 
+
 def test__register_file_with_the_database():
     database = db(connection=getenv('DATABASE_URL'))
     file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
@@ -63,4 +64,34 @@ def test__register_file_with_the_database():
     with database as session:
         file_record = session.get_file(file_id=file_id)
     assert file_id == file_record['id']
-    assert file.file_name() == file_record['name'] 
+    assert file.file_name() == file_record['name']
+    
+    # delete the data created
+    with database as session:
+        session.del_file(file_id=file_id)
+
+def test_save_embeddings():
+    database = db(connection=getenv('DATABASE_URL'))
+    file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
+    entity = 'ADP'
+    category = 'Warranty'
+    file = File(entity=entity, category=category, file_path=file_path)
+    ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
+    embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
+    save_successful = ai.save_embeddings(embeddings_table)
+    # check for the successful save
+    assert save_successful
+
+    file_id = int(embeddings_table["file_id"].iat[0])
+    with database as session:
+        records = session.get_embeddings(file_id=file_id)
+    
+    # embeddings_table had its embedding column converted to str in the save_embeddings method 
+    records['embedding'] = records['embedding'].astype(str)
+    # both dfs need the embeddings column as a str (hashable type) for this merge to work
+    merged = embeddings_table[['text','embedding']].merge(records, on=['text','embedding'], indicator=True)
+    # care only that the df's contain all of the same values, nothing else
+    assert (merged['_merge'] == 'both').all()
+
+    with database as session:
+        session.del_file(file_id=file_id)
