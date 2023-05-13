@@ -12,14 +12,18 @@ class File:
     
     def file_name(self) -> str:
         return self.file_path.split('/')[-1]
+    
+    def read_file(self) -> None:
+        self.reader = PdfReader(self.file_data if self.file_data else self.file_path)
+        self.num_pages = len(self.reader.pages)
 
     def read_and_chunk(self, chunks: int) -> list[str]:
         """
         Reads in an entire file and splits the text into equal sections (chunks) per page 
         Returns: a list of text sections
         """
-        reader = PdfReader(self.file_data if self.file_data else self.file_path)
-        text_by_page = [page.extract_text() for page in reader.pages]
+        self.read_file()
+        text_by_page = [page.extract_text() for page in self.reader.pages]
         text_by_page_split = []
         prefix = np.array([self.entity, self.category])
         for page in text_by_page:
