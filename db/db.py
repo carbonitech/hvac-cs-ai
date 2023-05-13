@@ -56,10 +56,12 @@ class db:
                 result = curr.fetchone()[0]
         return result
 
-    def get_entities(self):
+    def get_entities(self, entity_id: int|None=None):
         with self.conn:
             with self.conn.cursor() as curr:
                 sql = "SELECT * FROM entities;"
+                if entity_id:
+                    sql = sql.replace(';', 'WHERE id = %s;')
                 curr.execute(sql)
                 result = curr.fetchall()
         if result:
@@ -74,6 +76,14 @@ class db:
                 sql = "INSERT INTO files (name, entity_id) VALUES (%s,%s) RETURNING id;"
                 curr.execute(sql, (filename,entity))
                 return curr.fetchone()[0]
+    
+    def get_file(self, file_id: int) -> dict:
+        with self.conn:
+            with self.conn.cursor() as curr:
+                sql = "SELECT id, name, entity_id FROM files WHERE id = %s;"
+                curr.execute(sql,(file_id,))
+                record_id, file_name, entity_id = curr.fetchone()
+        return {"id": record_id, "name": file_name, "entity_id": entity_id}
 
     def close(self):
         self.conn.close()
