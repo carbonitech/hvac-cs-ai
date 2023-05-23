@@ -61,13 +61,19 @@ class db:
                 result = curr.fetchone()[0]
         return result
 
-    def get_entities(self, entity_id: int|None=None):
+    def get_entities(self, entity_id: int|None=None, entity_name: str|None=None):
         with self.conn:
             with self.conn.cursor() as curr:
                 sql = "SELECT * FROM entities;"
                 if entity_id:
-                    sql = sql.replace(';', 'WHERE id = %s;')
-                curr.execute(sql)
+                    sql = sql.replace(';', ' WHERE id = %s;')
+                    param = (entity_id,)
+                elif entity_name:
+                    sql = sql.replace(';', ' WHERE name = %s;')
+                    param = (entity_name,)
+                else:
+                    param = None
+                curr.execute(sql,param)
                 result = curr.fetchall()
         if result:
             entities = pd.DataFrame(result, columns=["id","name"])

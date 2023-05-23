@@ -39,10 +39,10 @@ class AI:
             Either way, add the file to the database under an entity"""
         entity = file.entity
         with self.db as session:
-            entities = session.get_entities()
+            entities = session.get_entities(entity_name=entity)
             if not entities.empty:
-                if id_val := entities.loc[entities["name"] == entity,"id"].item():
-                    file_id = session.add_file(file.file_name(), id_val)
+                id_val = entities.loc[entities["name"] == entity,"id"].item()
+                file_id = session.add_file(file.file_name(), id_val)
             else:
                 entity_id = session.add_entity(entity)
                 file_id = session.add_file(file.file_name(), entity=entity_id)
