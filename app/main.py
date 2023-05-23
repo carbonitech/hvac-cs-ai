@@ -27,7 +27,6 @@ Regarding the tradeoffs of document splitting strategy gernerally
 """
 
 # imports - openai cookbook
-import openai  # for calling the OpenAI API
 import pandas as pd  # for storing text and embeddings data
 import tiktoken  # for counting tokens
 from scipy import spatial  # for calculating vector similarities for search
@@ -35,10 +34,23 @@ from scipy import spatial  # for calculating vector similarities for search
 # project module imports
 from db.db import db
 from ai.ai import AI
-from app.file_handler import File
+from app.file_handler import File as FileHandler
+from fastapi import FastAPI, Depends
+from fastapi import File as FileFastAPI
+import os
+
+app = FastAPI()
 
 EMBEDDING_MODEL = "text-embedding-ada-002"
 GPT_MODEL = "gpt-3.5-turbo"
+
+def get_ai():
+    database = db(connection=os.getenv('DATABASE_URL'))
+    yield AI(
+        embedding_model_name=EMBEDDING_MODEL,
+        gpt_model_name=GPT_MODEL,
+        database=database
+    )
 
 def convert_to_tokens(text: str|list[str], model: str) -> list:
     encoding = tiktoken.encoding_for_model(model_name=model)
@@ -46,3 +58,16 @@ def convert_to_tokens(text: str|list[str], model: str) -> list:
         return encoding.encode(text=text)
     elif isinstance(text, list):
         return encoding.encode_batch(text=text)
+
+@app.post('/files')
+async def add_file(
+        entity: str,
+        category: str,
+        name: str,
+        file: bytes = FileFastAPI(),
+        ai: AI=Depends(get_ai)
+    ):
+   file = FileHandler(entity=entity, category=category, name=name, file_data=file)
+   embeddings_table = ai.generate_embeddings_table(file=file) 
+   ai.save_embeddings(embeddings_table)
+   return {"detail": "File Saved"}
