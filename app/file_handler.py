@@ -2,19 +2,26 @@ from dataclasses import dataclass
 from typing import Optional
 from pypdf import PdfReader
 import numpy as np
+from io import BytesIO
 
 @dataclass
 class File:
     entity: str
     category: str
+    name: str
     file_data: Optional[bytes] = None
     file_path: Optional[str] = None
-    
+
     def file_name(self) -> str:
-        return self.file_path.split('/')[-1]
+        if result := self.name:
+            return result 
+        elif result := self.file_path:
+            return result.split('/')[-1]
+        else:
+            return f"{self.entity}_{self.category}.pdf"
     
     def read_file(self) -> None:
-        self.reader = PdfReader(self.file_data if self.file_data else self.file_path)
+        self.reader = PdfReader(BytesIO(self.file_data) if self.file_data else self.file_path)
         self.num_pages = len(self.reader.pages)
 
     def read_and_chunk(self, chunks: int) -> list[str]:
