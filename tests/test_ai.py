@@ -36,6 +36,7 @@ class TestAI(AI):
 
 
 def test_generate_embeddings_table():
+    # first test with a file path
     database = db(connection=getenv('DATABASE_URL'))
     file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
     entity = 'ADP'
@@ -48,6 +49,15 @@ def test_generate_embeddings_table():
     # check that there are no NaN values
     assert not embeddings_table.isnull().values.any()
 
+    # now test with file bytes
+    with open(file_path, 'rb') as handler:
+        file_data = handler.read()
+    file = File(entity=entity, category=category, file_data=file_data)
+    embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
+    # check that the data has been chunked in processing
+    assert len(embeddings_table) == file.num_pages*3
+    # check that there are no NaN values
+    assert not embeddings_table.isnull().values.any()
 
 def test__register_file_with_the_database():
     database = db(connection=getenv('DATABASE_URL'))
