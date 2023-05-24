@@ -45,12 +45,15 @@ def test_generate_embeddings_table():
     category = 'Warranty'
     file = File(entity=entity, category=category, file_path=file_path)
 
+    file_ids = []
+
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
     # check that the data has been chunked in processing
     assert len(embeddings_table) == file.num_pages*3
     # check that there are no NaN values
     assert not embeddings_table.isnull().values.any()
+    file_ids.append(int(embeddings_table.at[0,"file_id"]))
 
     # now test with file bytes
     with open(file_path, 'rb') as handler:
@@ -61,6 +64,11 @@ def test_generate_embeddings_table():
     assert len(embeddings_table) == file.num_pages*3
     # check that there are no NaN values
     assert not embeddings_table.isnull().values.any()
+    file_ids.append(int(embeddings_table.at[0,"file_id"]))
+
+    # delete the data created
+    for file_id in file_ids:
+        delete_data(database=database, file_id=file_id)
 
 def test__register_file_with_the_database():
     database = db(connection=getenv('DATABASE_URL'))
@@ -71,17 +79,14 @@ def test__register_file_with_the_database():
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     file_id = ai._register_file_with_the_database(file=file)
     # check that an id has been returned
-    assert file_id
-    assert isinstance(file_id, int)
+    assert file_id and isinstance(file_id, int)
     # check that this file id has been recorded under the expected file name 
     with database as session:
         file_record = session.get_files(file_id=file_id).loc[0]
     assert file_id == file_record['id']
     assert file.file_name() == file_record['name']
     
-    # delete the data created
-    with database as session:
-        session.del_file(file_id=file_id)
+    delete_data(database=database, file_id=file_id)
 
 def test_save_embeddings():
     database = db(connection=getenv('DATABASE_URL'))
@@ -106,5 +111,9 @@ def test_save_embeddings():
     # care only that the df's contain all of the same values, nothing else
     assert (merged['_merge'] == 'both').all()
 
+    delete_data(database=database, file_id=file_id)
+    
+
+def delete_data(database: db, file_id: int):
     with database as session:
         session.del_file(file_id=file_id)
