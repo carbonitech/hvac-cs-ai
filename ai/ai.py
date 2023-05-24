@@ -117,6 +117,26 @@ class AI:
         return full_message
     
     def _complete_chat(self, messages: list[dict[str,str]]):
+        """
+        Response format:
+        {
+            'id': str,
+            'object': str,
+            'created': int,
+            'model': str,
+            'usage': {'prompt_tokens': int, 'completion_tokens': int, 'total_tokens': int}
+            'choices': [
+                {
+                    'message': {
+                        'role': str,
+                        'content': str
+                    }, 
+                    'finish_reason': str,
+                    'index': int
+                }
+            ]
+        }
+        """
         return openai.ChatCompletion.create(
             model=self.gpt_model_name,
             messages=messages,
