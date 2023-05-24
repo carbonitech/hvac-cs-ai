@@ -36,13 +36,36 @@ class TestAI(AI):
         }
         return embedding
 
+    def _complete_chat(self, messages: list[dict[str, str]]):
+        """override to fake call to OpenAI
+        The structure of the response matches tne expected response from OpenAI
+        """
+        response = {
+            'id': 'testid',
+            'object': 'testobj',
+            'created': 999999,
+            'model': GPT_MODEL,
+            'usage': {'prompt_tokens': 99, 'completion_tokens': 99, 'total_tokens': 99*2},
+            'choices': [
+                {
+                    'message': {
+                        'role': 'tester',
+                        'content': 'this is a test'
+                    }, 
+                    'finish_reason': 'test complete',
+                    'index': 0
+                }
+            ]
+        }
+        return response
+
 
 def test_generate_embeddings_table():
     # first test with a file path
     database = db(connection=getenv('DATABASE_URL'))
     file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
     entity = 'ADP'
-    category = 'Warranty'
+    category = 'Warranty TEST'
     file = File(entity=entity, category=category, file_path=file_path)
 
     file_ids = []
@@ -74,7 +97,7 @@ def test__register_file_with_the_database():
     database = db(connection=getenv('DATABASE_URL'))
     file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
     entity = 'ADP'
-    category = 'Warranty'
+    category = 'Warranty TEST'
     file = File(entity=entity, category=category, file_path=file_path)
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     file_id = ai._register_file_with_the_database(file=file)
@@ -92,7 +115,7 @@ def test_save_embeddings():
     database = db(connection=getenv('DATABASE_URL'))
     file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
     entity = 'ADP'
-    category = 'Warranty'
+    category = 'Warranty TEST'
     file = File(entity=entity, category=category, file_path=file_path)
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
@@ -122,6 +145,22 @@ def test_num_tokens():
     assert isinstance(result, int) and result > 0
     result = ai.num_tokens(text=test_str_list)
     assert isinstance(result, int) and result > 0
+
+def test_build_query_message():
+    ## setup ##
+    database = db(connection=getenv('DATABASE_URL'))
+    file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
+    entity = 'ADP'
+    category = 'Warranty TEST'
+    file = File(entity=entity, category=category, file_path=file_path)
+    ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
+    embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
+    ai.save_embeddings(embeddings_table)
+
+    query = 'What does a test question look like?'
+    full_msg = ai.build_query_message(query=query)
+    assert len(full_msg) != 0 and full_msg.__contains__('Document segment:')
+    delete_data(database=database, file_id=int(embeddings_table.at[0,"file_id"]))
 
 def delete_data(database: db, file_id: int):
     with database as session:
