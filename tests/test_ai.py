@@ -160,6 +160,7 @@ def test_build_query_message():
     query = 'What does a test question look like?'
     full_msg = ai.build_query_message(query=query)
     assert len(full_msg) != 0 and full_msg.__contains__('Document segment:')
+    assert full_msg.__contains__('Question:')
     delete_data(database=database, file_id=int(embeddings_table.at[0,"file_id"]))
 
 def delete_data(database: db, file_id: int):

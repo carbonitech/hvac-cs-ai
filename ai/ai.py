@@ -141,7 +141,7 @@ class AI:
                 break
             else:
                 full_message += next_segment
-        return full_message
+        return full_message + question
     
     def _complete_chat(self, messages: list[dict[str,str]]):
         """
@@ -169,12 +169,14 @@ class AI:
             messages=messages,
             temperature=0
         )
-    def ask_model(self, query: str) -> str:
+    def ask_model(self, query: str, print_msg: bool=False) -> str:
         """Answers a question (query) using GPT and a database of relevant text segments from uploaded vendor documents"""
         message = self.build_query_message(query=query)
         messages = [
             {"role": "system", "content": "You answer questions about vendor documents in the HVAC industry, which are typically handled by customer service agents"},
             {"role": "user", "content": message}
         ]
+        if print_msg:
+            print(message)
         response = self._complete_chat(messages=messages)
         return response['choices'][0]['message']['content']
