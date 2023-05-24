@@ -4,6 +4,7 @@ import openai
 import pandas as pd
 from db.db import db
 from app.file_handler import File
+from scipy import spatial  # for calculating vector similarities for search
 
 class AI:
 
@@ -57,3 +58,10 @@ class AI:
         with self.db as session:
             success = session.post_embeddings(records)
         return success
+
+    def ranked_strings_by_relatedness(
+            query: str,
+            relatedness_fn = lambda x, y: 1 - spatial.distance.cosine(x,y),
+            top_n: int = 100
+    ) -> tuple[list[str], list[float]]:
+        """Returns a list of strings and relatedness, sorted from most related to least"""
