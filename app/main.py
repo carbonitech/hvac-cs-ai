@@ -26,19 +26,8 @@ Regarding the tradeoffs of document splitting strategy gernerally
     -   Overlapping sections may help prevent answers from being cut by section boundaries
 """
 
-# imports - openai cookbook
-import tiktoken  # for counting tokens
-
-# project module imports
 from fastapi import FastAPI
 from app.resources.files import files
+
 app = FastAPI()
-
-def convert_to_tokens(text: str|list[str], model: str) -> list:
-    encoding = tiktoken.encoding_for_model(model_name=model)
-    if isinstance(text, str):
-        return encoding.encode(text=text)
-    elif isinstance(text, list):
-        return encoding.encode_batch(text=text)
-
 app.include_router(files)
