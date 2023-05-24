@@ -2,7 +2,7 @@ from app.resources.dependencies import get_ai, get_db
 from ai.ai import AI
 from db.db import db
 from app.file_handler import File as FileHandler
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi import File as FileFastAPI
 from pydantic import BaseModel
 
@@ -66,7 +66,11 @@ async def get_files(db: db=Depends(get_db)) -> FilesResponse:
 @files.get('/{file_id}')
 async def get_file(file_id: int, db: db=Depends(get_db)) -> OneFileRespose:
     with db as session:
-        filedf = session.get_files(file_id=file_id).loc[0]
+        filedf = session.get_files(file_id=file_id)
+        if filedf.empty:
+            raise HTTPException(404,"File Not Found")
+        else:
+            filedf = filedf.loc[0]
         entdf = session.get_entities(entity_id=int(filedf["entity_id"])).loc[0]
         embeddingsdf = session.get_embeddings(file_id=file_id)
     result = {
@@ -81,3 +85,8 @@ async def get_file(file_id: int, db: db=Depends(get_db)) -> OneFileRespose:
         }
     }
     return result
+
+@files.delete('/{file_id}')
+async def delete_file(file_id: int, db: db=Depends(get_db)) -> None:
+    with db as session:
+        return session.del_file(file_id=file_id)
