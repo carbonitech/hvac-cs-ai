@@ -113,6 +113,15 @@ def test_save_embeddings():
 
     delete_data(database=database, file_id=file_id)
     
+def test_num_tokens():
+    database = db(connection=getenv('DATABASE_URL'))
+    test_str = "This is a test string of words that don't really mean anything but represents a non-zero number of tokens."
+    test_str_list = [test_str[:len(test_str)], test_str[len(test_str):]]
+    ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
+    result = ai.num_tokens(text=test_str)
+    assert isinstance(result, int) and result > 0
+    result = ai.num_tokens(text=test_str_list)
+    assert isinstance(result, int) and result > 0
 
 def delete_data(database: db, file_id: int):
     with database as session:
