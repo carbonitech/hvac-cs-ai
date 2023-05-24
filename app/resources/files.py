@@ -21,7 +21,7 @@ class FilesResponse(BaseModel):
 
 class Embedding(BaseModel):
     text: str
-    embedding: list[float]
+    # embedding: list[float]
 
 class FileFullRecord(BaseModel):
     type: str
@@ -30,7 +30,7 @@ class FileFullRecord(BaseModel):
     entity_id: int
     entity_name: str
     category: str
-    embeddings: list[Embedding]
+    blocks: list[Embedding]
 
 class OneFileRespose(BaseModel):
     data: FileFullRecord
@@ -77,7 +77,7 @@ async def get_file(file_id: int, db: db=Depends(get_db)) -> OneFileRespose:
             'entity_id': entdf["id"],
             'entity_name': entdf["name"],
             'category': filedf["category"],
-            'embeddings': embeddingsdf[['text','embedding']].to_dict(orient='records')
+            'blocks': embeddingsdf[['text']].to_dict(orient='records')
         }
     }
     return result
