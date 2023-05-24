@@ -30,7 +30,6 @@ class AI:
             batch_embeddings = [embedding_object["embedding"] for embedding_object in response["data"]]
             embeddings.extend(batch_embeddings)
         result = pd.DataFrame({'text': segments, 'embedding': embeddings})
-        result["category"] = file.category
         result['file_id'] = self._register_file_with_the_database(file=file)
         return result
     
@@ -38,14 +37,15 @@ class AI:
         """Checks against the database for an existing entity BY NAME. If it doesn't exist, create it
             Either way, add the file to the database under an entity"""
         entity = file.entity
+        category = file.category
         with self.db as session:
             entities = session.get_entities(entity_name=entity)
             if not entities.empty:
                 id_val = entities.loc[entities["name"] == entity,"id"].item()
-                file_id = session.add_file(file.file_name(), id_val)
+                file_id = session.add_file(file.file_name(), id_val, category)
             else:
                 entity_id = session.add_entity(entity)
-                file_id = session.add_file(file.file_name(), entity=entity_id)
+                file_id = session.add_file(file.file_name(), entity=entity_id, category=category)
         return file_id
 
     

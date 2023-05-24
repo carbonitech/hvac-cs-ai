@@ -1,12 +1,14 @@
 from ai.ai import AI
 from random import random, randint
-from app.main import EMBEDDING_MODEL, GPT_MODEL
+from app.resources.dependencies import EMBEDDING_MODEL, GPT_MODEL
 import pandas as pd
 from app.file_handler import File
 from db.db import db
 from os import getenv
 
 class TestAI(AI):
+
+    __test__ = False
 
     def _create_embedding(self, text):
         """override to fake call to OpenAI
@@ -42,6 +44,7 @@ def test_generate_embeddings_table():
     entity = 'ADP'
     category = 'Warranty'
     file = File(entity=entity, category=category, file_path=file_path)
+
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
     # check that the data has been chunked in processing
@@ -72,7 +75,7 @@ def test__register_file_with_the_database():
     assert isinstance(file_id, int)
     # check that this file id has been recorded under the expected file name 
     with database as session:
-        file_record = session.get_file(file_id=file_id)
+        file_record = session.get_files(file_id=file_id).loc[0]
     assert file_id == file_record['id']
     assert file.file_name() == file_record['name']
     
@@ -99,7 +102,7 @@ def test_save_embeddings():
     # embeddings_table had its embedding column converted to str in the save_embeddings method 
     records['embedding'] = records['embedding'].astype(str)
     # both dfs need the embeddings column as a str (hashable type) for this merge to work
-    merged = embeddings_table[['text','embedding']].merge(records, on=['text','embedding'], indicator=True)
+    merged = embeddings_table[['text','embedding']].merge(records[['text','embedding']], on=['text','embedding'], indicator=True)
     # care only that the df's contain all of the same values, nothing else
     assert (merged['_merge'] == 'both').all()
 

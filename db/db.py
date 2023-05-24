@@ -20,7 +20,7 @@ class db:
         return True
 
     def get_embeddings(self, file_id: int = None) -> pd.DataFrame:
-        sql = "SELECT text, embedding FROM embeddings;"
+        sql = "SELECT text, embedding, file_id FROM embeddings;"
         with self.conn:
             with self.conn.cursor() as curr:
                 if file_id:
@@ -29,16 +29,16 @@ class db:
                 else:
                     curr.execute(sql) 
                 result = pd.DataFrame(curr.fetchall())
-                result.columns = ['text', 'embedding']
+                result.columns = ['text', 'embedding', 'file_id']
                 result['embedding'] = result['embedding'].apply(ast.literal_eval)
                 return result
 
     def post_embeddings(self, values: list[tuple|dict]) -> bool:
         success = False
         if isinstance(values[0], dict):
-            sql = "INSERT INTO embeddings (text, embedding, file_id, category) VALUES (%(text)s, %(embedding)s,%(file_id)s, %(category)s)"
+            sql = "INSERT INTO embeddings (text, embedding, file_id) VALUES (%(text)s, %(embedding)s,%(file_id)s)"
         elif isinstance(values[0], tuple):
-            sql = "INSERT INTO embeddings (text, embedding, file_id, category) VALUES (%s, %s, %s, %s)"
+            sql = "INSERT INTO embeddings (text, embedding, file_id) VALUES (%s, %s, %s)"
         # avoid breaking when duplicated text gets kicked back due to the uniqueness constraint in the database
         sql += " ON CONFLICT DO NOTHING;"
         with self.conn:
@@ -81,21 +81,25 @@ class db:
             entities = pd.DataFrame()
         return entities 
 
-    def add_file(self, filename: str, entity: int):
+    def add_file(self, filename: str, entity: int, category: str):
         with self.conn:
             with self.conn.cursor() as curr:
-                sql = "INSERT INTO files (name, entity_id) VALUES (%s,%s) RETURNING id;"
-                curr.execute(sql, (filename,entity))
+                sql = "INSERT INTO files (name, entity_id, category) VALUES (%s,%s,%s) RETURNING id;"
+                curr.execute(sql, (filename,entity,category))
                 return curr.fetchone()[0]
     
-    def get_file(self, file_id: int) -> dict:
+    def get_files(self, file_id: int=0) -> pd.DataFrame:
         """Getting only file metadata, not the embeddings"""
         with self.conn:
             with self.conn.cursor() as curr:
-                sql = "SELECT id, name, entity_id FROM files WHERE id = %s;"
-                curr.execute(sql,(file_id,))
-                record_id, file_name, entity_id = curr.fetchone()
-        return {"id": record_id, "name": file_name, "entity_id": entity_id}
+                sql = "SELECT id, name, entity_id, category FROM files;"
+                param = None
+                if file_id:
+                    sql = sql.replace(';', " WHERE id = %s;")
+                    param = (file_id,)
+                curr.execute(sql,param)
+                result = pd.DataFrame(curr.fetchall(), columns=['id','name','entity_id','category']) 
+        return result
 
     def del_file(self, file_id: int):
         with self.conn:
