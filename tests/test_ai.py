@@ -139,7 +139,8 @@ def test_save_embeddings():
 def test_num_tokens():
     database = db(connection=getenv('DATABASE_URL'))
     test_str = "This is a test string of words that don't really mean anything but represents a non-zero number of tokens."
-    test_str_list = [test_str[:len(test_str)], test_str[len(test_str):]]
+    split_point = len(test_str)//2
+    test_str_list = [test_str[:split_point], test_str[split_point:]]
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     result = ai.num_tokens(text=test_str)
     assert isinstance(result, int) and result > 0
