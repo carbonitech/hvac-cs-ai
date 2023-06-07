@@ -3,6 +3,7 @@
 import ast
 import psycopg2 as pg
 import pandas as pd
+from datetime import datetime
 
 class db:
 
@@ -82,23 +83,24 @@ class db:
         return entities 
 
     def add_file(self, filename: str, entity: int, category: str):
+        _now = datetime.utcnow()
         with self.conn:
             with self.conn.cursor() as curr:
-                sql = "INSERT INTO files (name, entity_id, category) VALUES (%s,%s,%s) RETURNING id;"
-                curr.execute(sql, (filename,entity,category))
+                sql = "INSERT INTO files (name, entity_id, category, uploaded_at) VALUES (%s,%s,%s,%s) RETURNING id;"
+                curr.execute(sql, (filename, entity, category, _now))
                 return curr.fetchone()[0]
     
     def get_files(self, file_id: int=0) -> pd.DataFrame:
         """Getting only file metadata, not the embeddings"""
         with self.conn:
             with self.conn.cursor() as curr:
-                sql = "SELECT id, name, entity_id, category FROM files;"
+                sql = "SELECT id, name, entity_id, category, uploaded_at FROM files;"
                 param = None
                 if file_id:
                     sql = sql.replace(';', " WHERE id = %s;")
                     param = (file_id,)
                 curr.execute(sql,param)
-                result = pd.DataFrame(curr.fetchall(), columns=['id','name','entity_id','category']) 
+                result = pd.DataFrame(curr.fetchall(), columns=['id','name','entity_id','category','uploaded_at']) 
         return result
 
     def del_file(self, file_id: int):

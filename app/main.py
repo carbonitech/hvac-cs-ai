@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File
 from fastapi.middleware.cors import CORSMiddleware
 from app.resources.files import files
 from app.resources.chat import chat
@@ -19,6 +19,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get('/test')
-def test_route(param1: str):
-    return {'data': param1}
+@app.post('/test')
+async def add_file(
+        entity: str,
+        category: str,
+        name: str,
+        file: bytes = File()
+    ):
+
+    print(file[:10])
+    return {entity, category, name}

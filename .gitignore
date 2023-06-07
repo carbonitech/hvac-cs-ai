@@ -162,3 +162,5 @@ cython_debug/
 # manual additions
 *.pdf
 *.csv
+file_scraper.py
+bulk_file_uploader.py
