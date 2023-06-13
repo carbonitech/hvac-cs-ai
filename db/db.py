@@ -31,7 +31,6 @@ class db:
                     curr.execute(sql) 
                 result = pd.DataFrame(curr.fetchall())
                 result.columns = ['text', 'embedding', 'file_id']
-                result['embedding'] = result['embedding'].apply(ast.literal_eval)
                 return result
 
     def post_embeddings(self, values: list[tuple|dict]) -> bool:
