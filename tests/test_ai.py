@@ -113,7 +113,7 @@ def test__register_file_with_the_database():
 
 def test_save_embeddings():
     database = db(connection=getenv('DATABASE_URL'))
-    file_path = '/home/carboni/projects/hvac-cs-ai/5e133f6d27f35743210648.pdf'
+    file_path = '/home/carboni/projects/hvac-cs-ai/5e1383e7a3e4a935440239.pdf'
     entity = 'ADP'
     category = 'Warranty TEST'
     file = File(entity=entity, category=category, file_path=file_path)
@@ -127,9 +127,9 @@ def test_save_embeddings():
     with database as session:
         records = session.get_embeddings(file_id=file_id)
     
-    # embeddings_table had its embedding column converted to str in the save_embeddings method 
-    records['embedding'] = records['embedding'].astype(str)
     # both dfs need the embeddings column as a str (hashable type) for this merge to work
+    records['embedding'] = records['embedding'].astype(str)
+    embeddings_table['embedding'] = embeddings_table['embedding'].astype(str)
     merged = embeddings_table[['text','embedding']].merge(records[['text','embedding']], on=['text','embedding'], indicator=True)
     # care only that the df's contain all of the same values, nothing else
     assert (merged['_merge'] == 'both').all()
