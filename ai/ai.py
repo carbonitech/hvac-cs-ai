@@ -33,6 +33,7 @@ from db.db import db
 from app.file_handler import File
 from scipy import spatial  # for calculating vector similarities for search
 import tiktoken  # for counting tokens
+from datetime import datetime
 
 class AI:
 
@@ -90,9 +91,6 @@ class AI:
 
     
     def save_embeddings(self, df: pd.DataFrame) -> bool:
-        # convert embeddings to strings so they aren't converted to python sets by Postgres
-        # NOTE this change affects changes the state of the df inputted
-        df["embedding"] = df["embedding"].apply(str)
         records: list[dict] = df.to_dict(orient="records") 
         with self.db as session:
             success = session.post_embeddings(records)
@@ -105,15 +103,19 @@ class AI:
             doc_embeddings: pd.DataFrame,
             relatedness_fn = lambda x, y: 1 - spatial.distance.cosine(x,y),
             top_n: int = 5
-    ) -> pd.DataFrame:
-   #) -> tuple[list[str], list[float]]:
+    ) -> tuple[list[str], list[float]]:
         """Returns a dataframe of the top_n document embeddings in the database, scored and ranked in descending order
             The dataframe will have columns upon return -> text, embedding, file_id, score"""
         query_embedding_resp = self._create_embedding(query)
-        query_embedding = query_embedding_resp['data'][0]['embedding']
-        doc_embeddings['score'] = doc_embeddings['embedding'].apply(lambda emb: relatedness_fn(query_embedding, emb))
-        doc_embeddings = doc_embeddings.sort_values(by='score', ascending=False)
-        return doc_embeddings.head(n=top_n)
+        query_embedding = tuple(query_embedding_resp['data'][0]['embedding'])
+        strings_and_relatedness = [(row.text, relatedness_fn(query_embedding, row.embedding))
+                                   for row in doc_embeddings.itertuples()]
+        strings_and_relatedness.sort(key=lambda li: li[1])
+        strings, relatedness = zip(*strings_and_relatedness)
+        # doc_embeddings['score'] = doc_embeddings['embedding'].apply(lambda emb: relatedness_fn(query_embedding, emb))
+        # doc_embeddings = doc_embeddings.sort_values(by='score', ascending=False)
+        # return doc_embeddings.head(n=top_n)
+        return strings[:top_n], relatedness[:top_n]
 
     def num_tokens(self, text: str|list[str]) -> int:
         encoding = tiktoken.encoding_for_model(model_name=self.gpt_model_name)
@@ -131,12 +133,12 @@ class AI:
         """Build a message for GPT with an introduction, relevant source texts, and the question/query to answer"""
         with self.db as session:
             all_file_embeddings = session.get_embeddings()
-        top_related = self.ranked_strings_by_relatedness(query=query, doc_embeddings=all_file_embeddings)
+        top_related_text, _ = self.ranked_strings_by_relatedness(query=query, doc_embeddings=all_file_embeddings)
         introduction = 'Use the document segments below provided by vendors that explain topics such as warranty policies, product specifications, and installation instructions to answer the subsequent question. If the answer cannot be found in these document segments, write \"Sorry, I could not find an answer.\"\n'
         question = f"\n\nQuestion: {query}"
         full_message = introduction
-        for row in top_related.itertuples():
-            next_segment = f'\n\nDocument segment:\n"""\n{row.text}'
+        for text in top_related_text:
+            next_segment = f'\n\nDocument segment:\n"""\n{text}'
             if self.num_tokens(full_message + next_segment + question) > self.token_limit:
                 break
             else:
@@ -171,9 +173,11 @@ class AI:
         )
     def ask_model(self, query: str, print_msg: bool=False) -> str:
         """Answers a question (query) using GPT and a database of relevant text segments from uploaded vendor documents"""
+        _today = datetime.date()
         message = self.build_query_message(query=query)
         messages = [
-            {"role": "system", "content": "You answer questions about vendor documents in the HVAC industry, which are typically handled by customer service agents"},
+            {"role": "system", "content": f"Today's date is {_today}. \
+             You are a customer service agent, and to answer queries, you reference HVAC vendor documents."},
             {"role": "user", "content": message}
         ]
         if print_msg:
