@@ -122,7 +122,7 @@ class AI:
         ) -> tuple[tuple[str], tuple[float]]:
         strings_and_relatedness = [(row.text, relatedness_fn(query, row.embedding))
                                    for row in embeddings.itertuples()]
-        strings_and_relatedness.sort(key=lambda li: li[1])
+        strings_and_relatedness.sort(key=lambda li: li[1], reverse=True)
         strings, relatedness = zip(*strings_and_relatedness)
         return strings[:top_n], relatedness[:top_n]
 
@@ -152,9 +152,9 @@ class AI:
             top_file_embeddings = session.get_embeddings(file_id=top_related_file_ids)
 
         top_related_text, _ = self.ranked_strings_by_relatedness(query=query_embedding, embeddings=top_file_embeddings)
-        introduction = 'Use the document segments below provided by vendors that explain topics such as warranty policies,\
-            product specifications, and installation instructions to answer the subsequent question. If the answer cannot be found\
-            in these document segments, write \"Sorry, I could not find an answer.\"\n'
+        introduction = """Use the document segments below provided by vendors that explain topics such as warranty policies,
+            product specifications, and installation instructions to answer the subsequent question. If the answer cannot be found
+            in these document segments, write \"Sorry, I could not find an answer.\"\n"""
         question = f"\n\nQuestion: {query}"
         full_message = introduction
         for text in top_related_text:
@@ -191,9 +191,9 @@ class AI:
             messages=messages,
             temperature=0
         )
-    def ask_model(self, query: str, print_msg: bool=False) -> str:
+    def ask_model(self, query: str, print_msg: bool=True) -> str:
         """Answers a question (query) using GPT and a database of relevant text segments from uploaded vendor documents"""
-        _today = datetime.date()
+        _today = datetime.utcnow().date()
         message = self.build_query_message(query=query)
         messages = [
             {"role": "system", "content": f"Today's date is {_today}. \
