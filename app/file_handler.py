@@ -43,3 +43,6 @@ class File:
             text_by_page_split.extend(list(split_string))
 
         return text_by_page_split
+
+    def add_embedding(self, embedding: list[float]) -> None:
+        self.embedding = embedding

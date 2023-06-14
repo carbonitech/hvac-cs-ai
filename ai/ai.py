@@ -34,6 +34,7 @@ from app.file_handler import File
 from scipy import spatial  # for calculating vector similarities for search
 import tiktoken  # for counting tokens
 from datetime import datetime
+import numpy as np
 
 class AI:
 
@@ -71,6 +72,8 @@ class AI:
             batch_embeddings = [embedding_object["embedding"] for embedding_object in response["data"]]
             embeddings.extend(batch_embeddings)
         result = pd.DataFrame({'text': segments, 'embedding': embeddings})
+        doc_embedding = list(np.mean(result['embedding'].tolist(), axis=0))
+        file.add_embedding(embedding=doc_embedding)
         result['file_id'] = self._register_file_with_the_database(file=file)
         return result
     
@@ -79,14 +82,15 @@ class AI:
             Either way, add the file to the database under an entity"""
         entity = file.entity
         category = file.category
+        embedding = file.embedding
         with self.db as session:
             entities = session.get_entities(entity_name=entity)
             if not entities.empty:
                 id_val = entities.loc[entities["name"] == entity,"id"].item()
-                file_id = session.add_file(file.file_name(), id_val, category)
+                file_id = session.add_file(file.file_name(), id_val, category, embedding=embedding)
             else:
                 entity_id = session.add_entity(entity)
-                file_id = session.add_file(file.file_name(), entity=entity_id, category=category)
+                file_id = session.add_file(file.file_name(), entity=entity_id, category=category, embedding=embedding)
         return file_id
 
     
@@ -96,25 +100,30 @@ class AI:
             success = session.post_embeddings(records)
         return success
 
+    def rank_files_by_relatedness(
+            self,
+            query: tuple[float],
+            document_embeddings: pd.DataFrame,
+            relatedness_fn = lambda x, y: 1 - spatial.distance.cosine(x,y),
+            top_n: int = 5
+        ) -> tuple[tuple[str], tuple[float]]:
+            files_and_relatedness = [(row.id, relatedness_fn(query,row.embedding))
+                                     for row in document_embeddings.itertuples()]
+            files_and_relatedness.sort(key=lambda li: li[1], reverse=True)
+            file_ids, relatedness = zip(*files_and_relatedness)
+            return file_ids[:top_n], relatedness[:top_n]
 
     def ranked_strings_by_relatedness(
             self,
-            query: str,
-            doc_embeddings: pd.DataFrame,
+            query: tuple[float],
+            embeddings: pd.DataFrame,
             relatedness_fn = lambda x, y: 1 - spatial.distance.cosine(x,y),
             top_n: int = 5
-    ) -> tuple[list[str], list[float]]:
-        """Returns a dataframe of the top_n document embeddings in the database, scored and ranked in descending order
-            The dataframe will have columns upon return -> text, embedding, file_id, score"""
-        query_embedding_resp = self._create_embedding(query)
-        query_embedding = tuple(query_embedding_resp['data'][0]['embedding'])
-        strings_and_relatedness = [(row.text, relatedness_fn(query_embedding, row.embedding))
-                                   for row in doc_embeddings.itertuples()]
+        ) -> tuple[tuple[str], tuple[float]]:
+        strings_and_relatedness = [(row.text, relatedness_fn(query, row.embedding))
+                                   for row in embeddings.itertuples()]
         strings_and_relatedness.sort(key=lambda li: li[1])
         strings, relatedness = zip(*strings_and_relatedness)
-        # doc_embeddings['score'] = doc_embeddings['embedding'].apply(lambda emb: relatedness_fn(query_embedding, emb))
-        # doc_embeddings = doc_embeddings.sort_values(by='score', ascending=False)
-        # return doc_embeddings.head(n=top_n)
         return strings[:top_n], relatedness[:top_n]
 
     def num_tokens(self, text: str|list[str]) -> int:
@@ -131,10 +140,21 @@ class AI:
     
     def build_query_message(self, query: str) -> str:
         """Build a message for GPT with an introduction, relevant source texts, and the question/query to answer"""
+        query_embedding_resp = self._create_embedding(query)
+        query_embedding = tuple(query_embedding_resp['data'][0]['embedding'])
+
         with self.db as session:
-            all_file_embeddings = session.get_embeddings()
-        top_related_text, _ = self.ranked_strings_by_relatedness(query=query, doc_embeddings=all_file_embeddings)
-        introduction = 'Use the document segments below provided by vendors that explain topics such as warranty policies, product specifications, and installation instructions to answer the subsequent question. If the answer cannot be found in these document segments, write \"Sorry, I could not find an answer.\"\n'
+            all_files = session.get_files()
+        
+        top_related_file_ids, _ = self.rank_files_by_relatedness(query=query_embedding, document_embeddings=all_files)
+
+        with self.db as session:
+            top_file_embeddings = session.get_embeddings(file_id=top_related_file_ids)
+
+        top_related_text, _ = self.ranked_strings_by_relatedness(query=query_embedding, embeddings=top_file_embeddings)
+        introduction = 'Use the document segments below provided by vendors that explain topics such as warranty policies,\
+            product specifications, and installation instructions to answer the subsequent question. If the answer cannot be found\
+            in these document segments, write \"Sorry, I could not find an answer.\"\n'
         question = f"\n\nQuestion: {query}"
         full_message = introduction
         for text in top_related_text:

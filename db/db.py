@@ -1,6 +1,5 @@
 """Interface for the database with methods designed to handle embeddings, and CRUD on entities that surround the reference files"""
 
-import ast
 import psycopg2 as pg
 import pandas as pd
 from datetime import datetime
@@ -20,17 +19,23 @@ class db:
         self.close()
         return True
 
-    def get_embeddings(self, file_id: int = None) -> pd.DataFrame:
+    def get_embeddings(self, file_id: int|list[int] = None) -> pd.DataFrame:
         sql = "SELECT text, embedding, file_id FROM embeddings;"
         with self.conn:
             with self.conn.cursor() as curr:
                 if file_id:
-                    sql = sql.replace(';', ' WHERE file_id = %s;')
-                    curr.execute(sql, (file_id,)) 
+                    match file_id:
+                        case [*ids]:
+                            sql = sql.replace(';', ' WHERE file_id IN %s;')
+                            curr.execute(sql, (tuple(ids),)) 
+                        case _:
+                            sql = sql.replace(';', ' WHERE file_id = %s;')
+                            curr.execute(sql, (file_id,)) 
                 else:
                     curr.execute(sql) 
                 result = pd.DataFrame(curr.fetchall())
                 result.columns = ['text', 'embedding', 'file_id']
+                result['embedding'] = result['embedding'].apply(tuple)
                 return result
 
     def post_embeddings(self, values: list[tuple|dict]) -> bool:
@@ -81,25 +86,28 @@ class db:
             entities = pd.DataFrame()
         return entities 
 
-    def add_file(self, filename: str, entity: int, category: str):
+    def add_file(self, filename: str, entity: int, category: str, embedding: list[float]):
         _now = datetime.utcnow()
         with self.conn:
             with self.conn.cursor() as curr:
-                sql = "INSERT INTO files (name, entity_id, category, uploaded_at) VALUES (%s,%s,%s,%s) RETURNING id;"
-                curr.execute(sql, (filename, entity, category, _now))
+                sql = """INSERT INTO files (name, entity_id, category, uploaded_at, embedding)
+                        VALUES (%s,%s,%s,%s,%s)
+                        RETURNING id;"""
+                params = (filename, entity, category, _now, embedding)
+                curr.execute(sql,params)
                 return curr.fetchone()[0]
     
     def get_files(self, file_id: int=0) -> pd.DataFrame:
-        """Getting only file metadata, not the embeddings"""
+        """Getting only file metadata, not the text-chunk embeddings"""
         with self.conn:
             with self.conn.cursor() as curr:
-                sql = "SELECT id, name, entity_id, category, uploaded_at FROM files;"
+                sql = "SELECT id, name, entity_id, category, uploaded_at, embedding FROM files;"
                 param = None
                 if file_id:
                     sql = sql.replace(';', " WHERE id = %s;")
                     param = (file_id,)
                 curr.execute(sql,param)
-                result = pd.DataFrame(curr.fetchall(), columns=['id','name','entity_id','category','uploaded_at']) 
+                result = pd.DataFrame(curr.fetchall(), columns=['id','name','entity_id','category','uploaded_at','embedding']) 
         return result
 
     def del_file(self, file_id: int):
