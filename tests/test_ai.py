@@ -72,26 +72,27 @@ def test_generate_embeddings_table():
 
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
-    # check that the data has been chunked in processing
-    assert len(embeddings_table) == file.num_pages*3
-    # check that there are no NaN values
-    assert not embeddings_table.isnull().values.any()
-    file_ids.append(int(embeddings_table.at[0,"file_id"]))
+    try:
+        # check that the data has been chunked in processing
+        assert len(embeddings_table) == file.num_pages*3
+        # check that there are no NaN values
+        assert not embeddings_table.isnull().values.any()
+        file_ids.append(int(embeddings_table.at[0,"file_id"]))
 
-    # now test with file bytes
-    with open(file_path, 'rb') as handler:
-        file_data = handler.read()
-    file = File(entity=entity, category=category, file_data=file_data)
-    embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
-    # check that the data has been chunked in processing
-    assert len(embeddings_table) == file.num_pages*3
-    # check that there are no NaN values
-    assert not embeddings_table.isnull().values.any()
-    file_ids.append(int(embeddings_table.at[0,"file_id"]))
-
-    # delete the data created
-    for file_id in file_ids:
-        delete_data(database=database, file_id=file_id)
+        # now test with file bytes
+        with open(file_path, 'rb') as handler:
+            file_data = handler.read()
+        file = File(entity=entity, category=category, file_data=file_data)
+        embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
+        # check that the data has been chunked in processing
+        assert len(embeddings_table) == file.num_pages*3
+        # check that there are no NaN values
+        assert not embeddings_table.isnull().values.any()
+        file_ids.append(int(embeddings_table.at[0,"file_id"]))
+    finally:
+        # delete the data created
+        for file_id in file_ids:
+            delete_data(database=database, file_id=file_id)
 
 def test__register_file_with_the_database():
     database = db(connection=getenv('DATABASE_URL'))
@@ -100,16 +101,20 @@ def test__register_file_with_the_database():
     category = 'Warranty TEST'
     file = File(entity=entity, category=category, file_path=file_path)
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
-    file_id = ai._register_file_with_the_database(file=file)
-    # check that an id has been returned
-    assert file_id and isinstance(file_id, int)
-    # check that this file id has been recorded under the expected file name 
-    with database as session:
-        file_record = session.get_files(file_id=file_id).loc[0]
-    assert file_id == file_record['id']
-    assert file.file_name() == file_record['name']
-    
-    delete_data(database=database, file_id=file_id)
+    file.add_embedding(embedding=[randint(1,100)/100 for i in range(1536)])
+    file_id = None
+    try:
+        file_id = ai._register_file_with_the_database(file=file)
+        # check that an id has been returned
+        assert file_id and isinstance(file_id, int)
+        # check that this file id has been recorded under the expected file name 
+        with database as session:
+            file_record = session.get_files(file_id=file_id).loc[0]
+        assert file_id == file_record['id']
+        assert file.file_name() == file_record['name']
+        assert file.embedding == file_record['embedding']
+    finally: 
+        delete_data(database=database, file_id=file_id)
 
 def test_save_embeddings():
     database = db(connection=getenv('DATABASE_URL'))
@@ -120,21 +125,22 @@ def test_save_embeddings():
     ai = TestAI(EMBEDDING_MODEL,GPT_MODEL,database)
     embeddings_table: pd.DataFrame = ai.generate_embeddings_table(file=file)
     save_successful = ai.save_embeddings(embeddings_table)
-    # check for the successful save
-    assert save_successful
+    try:
+        # check for the successful save
+        assert save_successful
 
-    file_id = int(embeddings_table["file_id"].iat[0])
-    with database as session:
-        records = session.get_embeddings(file_id=file_id)
-    
-    # both dfs need the embeddings column as a str (hashable type) for this merge to work
-    records['embedding'] = records['embedding'].astype(str)
-    embeddings_table['embedding'] = embeddings_table['embedding'].astype(str)
-    merged = embeddings_table[['text','embedding']].merge(records[['text','embedding']], on=['text','embedding'], indicator=True)
-    # care only that the df's contain all of the same values, nothing else
-    assert (merged['_merge'] == 'both').all()
-
-    delete_data(database=database, file_id=file_id)
+        file_id = int(embeddings_table["file_id"].iat[0])
+        with database as session:
+            records = session.get_embeddings(file_id=file_id)
+        
+        # both dfs need the embeddings column as a str (hashable type) for this merge to work
+        records['embedding'] = records['embedding'].astype(str)
+        embeddings_table['embedding'] = embeddings_table['embedding'].astype(str)
+        merged = embeddings_table[['text','embedding']].merge(records[['text','embedding']], on=['text','embedding'], indicator=True)
+        # care only that the df's contain all of the same values, nothing else
+        assert (merged['_merge'] == 'both').all()
+    finally:
+        delete_data(database=database, file_id=file_id)
     
 def test_num_tokens():
     database = db(connection=getenv('DATABASE_URL'))
@@ -159,11 +165,14 @@ def test_build_query_message():
     ai.save_embeddings(embeddings_table)
 
     query = 'What does a test question look like?'
-    full_msg = ai.build_query_message(query=query)
-    assert len(full_msg) != 0 and full_msg.__contains__('Document segment:')
-    assert full_msg.__contains__('Question:')
-    delete_data(database=database, file_id=int(embeddings_table.at[0,"file_id"]))
+    try:
+        full_msg = ai.build_query_message(query=query)
+        assert len(full_msg) != 0 and full_msg.__contains__('Document segment:')
+        assert full_msg.__contains__('Question:')
+    finally:
+        delete_data(database=database, file_id=int(embeddings_table.at[0,"file_id"]))
 
 def delete_data(database: db, file_id: int):
-    with database as session:
-        session.del_file(file_id=file_id)
+    if file_id:
+        with database as session:
+            session.del_file(file_id=file_id)
