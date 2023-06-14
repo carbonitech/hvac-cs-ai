@@ -191,7 +191,7 @@ class AI:
             messages=messages,
             temperature=0
         )
-    def ask_model(self, query: str, print_msg: bool=True) -> str:
+    def ask_model(self, query: str, print_msg: bool=False) -> str:
         """Answers a question (query) using GPT and a database of relevant text segments from uploaded vendor documents"""
         _today = datetime.utcnow().date()
         message = self.build_query_message(query=query)
